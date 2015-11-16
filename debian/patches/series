@@ -1,0 +1,12 @@
+0001-fix-fprintf-format.patch
+debian-changes-4.5.2-1.1
+0001-Fix-boolean-return-value-if-an-empty-RSA-signature-i.patch
+0001-Added-support-for-the-resolvconf-framework-in-resolv.patch
+0001-Check-return-value-of-ECDSA_Verify-correctly.patch
+CVE-2013-6075.patch
+CVE-2014-2338-4.x.patch
+CVE-2014-2891.patch
+CVE-2014-9221_modp_custom.patch
+CVE-2014-9221_dh_group.patch
+CVE-2015-4171_enforce_remote_auth.patch
+CVE-2015-8023_eap_mschapv2_state.patch
