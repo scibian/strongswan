@@ -36,8 +36,13 @@ CONFIGUREARGS := --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
 
 DEB_BUILD_ARCH_CPU ?=$(shell dpkg-architecture -qDEB_BUILD_ARCH_CPU)
 
+ifeq (debug,$(filter debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -ggdb3
+endif
 ifeq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	CFLAGS += -O2
+else
+	CFLAGS += -O0
 endif
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
