@@ -10,3 +10,5 @@ CVE-2014-9221_modp_custom.patch
 CVE-2014-9221_dh_group.patch
 CVE-2015-4171_enforce_remote_auth.patch
 CVE-2015-8023_eap_mschapv2_state.patch
+0001-If-no-pkcs11-public-key-for-a-private-key-found.patch
+0002-PKCS11-library-search-using-keyid-uses-a-fallback.patch
