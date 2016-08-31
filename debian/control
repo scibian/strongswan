@@ -47,7 +47,7 @@ Package: strongswan-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: ${misc:Depends}, strongswan, libstrongswan
+Depends: ${misc:Depends}, strongswan | libstrongswan
 Description: strongSwan library and binaries - debugging symbols
  StrongSwan is an IPsec-based VPN solution for the Linux kernel. It uses the
  native IPsec stack and runs on any recent 2.6 kernel (no patching required).
