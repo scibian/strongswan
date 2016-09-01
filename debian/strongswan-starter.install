@@ -24,3 +24,4 @@ usr/share/man/man8/openac.8                     usr/share/man/man8/
 # stroke
 usr/lib/ipsec/stroke                                                       usr/lib/ipsec/
 usr/lib/ipsec/plugins/libstrongswan-stroke.so*     usr/lib/ipsec/plugins/
+lib/systemd/system/strongswan.service	lib/systemd/system/
