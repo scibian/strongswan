@@ -14,3 +14,4 @@ CVE-2015-8023_eap_mschapv2_state.patch
 0002-PKCS11-library-search-using-keyid-uses-a-fallback.patch
 login-refactor.patch
 keyid-alias.patch
+nm_plugin_initialization.patch

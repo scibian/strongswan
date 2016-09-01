@@ -1,0 +1,22 @@
+Description: fix the initialisation of the nm plugin
+ Patched in a similar way by upstream:
+ http://git.strongswan.org/?p=strongswan.git;a=commitdiff;h=c140757221ed62c1ab1c193d9914c18a986bd9a0
+Forwarded: not-needed
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2013-08-05
+
+Index: strongswan-4.5.2/src/libcharon/plugins/nm/nm_plugin.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libcharon/plugins/nm/nm_plugin.c	2013-08-05 14:59:23.162773075 +0200
++++ strongswan-4.5.2/src/libcharon/plugins/nm/nm_plugin.c	2013-08-05 15:00:37.362910439 +0200
+@@ -118,8 +118,9 @@
+ 		},
+ 		.creds = nm_creds_create(),
+ 		.handler = nm_handler_create(),
+-		.plugin = nm_strongswan_plugin_new(this->creds, this->handler),
++		.plugin = NULL,
+ 	);
++	this->plugin = nm_strongswan_plugin_new(this->creds, this->handler);
+ 
+ 	hydra->attributes->add_handler(hydra->attributes, &this->handler->handler);
+ 	lib->credmgr->add_set(lib->credmgr, &this->creds->set);
