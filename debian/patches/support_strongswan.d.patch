@@ -1,0 +1,16 @@
+Description: include configuration snippets from /etc/strongswan.d by default
+ Cf. https://wiki.strongswan.org/issues/475
+Forwarded: not-needed
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2014-03-20
+
+Index: strongswan-4.5.2/src/strongswan.conf
+===================================================================
+--- strongswan-4.5.2.orig/src/strongswan.conf	2010-10-22 16:33:30.000000000 +0200
++++ strongswan-4.5.2/src/strongswan.conf	2014-03-20 17:10:51.251433320 +0100
+@@ -32,3 +32,5 @@ libstrongswan {
+ 	#  set to no, the DH exponent size is optimized
+ 	#  dh_exponent_ansi_x9_42 = no
+ }
++
++include strongswan.d/*.conf

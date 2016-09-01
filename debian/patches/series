@@ -16,3 +16,4 @@ login-refactor.patch
 keyid-alias.patch
 nm_plugin_initialization.patch
 skip_oid_policy_validation.patch
+support_strongswan.d.patch
