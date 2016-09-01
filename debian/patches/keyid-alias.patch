@@ -1,0 +1,255 @@
+Description: allow a secondary keyid (an "alias") to be used
+Forwarded: https://wiki.strongswan.org/issues/490
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2013-08-05
+
+Index: strongswan-4.5.2/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c	2013-08-05 15:10:24.199999287 +0200
++++ strongswan-4.5.2/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c	2013-08-05 15:27:49.561948320 +0200
+@@ -64,6 +64,11 @@
+ 	identification_t *keyid;
+ 
+ 	/**
++	 * Keyid (alias) of the key we use
++	 */
++	identification_t *keyid_alias;
++
++	/**
+ 	 * Associated public key
+ 	 */
+ 	public_key_t *pubkey;
+@@ -181,7 +186,15 @@
+ {
+ 	DBG1(DBG_CFG, "reauthentication in progress");
+ 
+-	return generic_auth(this, CKU_CONTEXT_SPECIFIC, this->keyid);
++	if (generic_auth(this, CKU_CONTEXT_SPECIFIC, this->keyid))
++	{
++		return TRUE;
++	}
++	else if (this->keyid_alias)
++	{
++		return generic_auth(this, CKU_CONTEXT_SPECIFIC, this->keyid_alias);
++	}
++	return FALSE;
+ }
+ 
+ METHOD(private_key_t, sign, bool,
+@@ -306,6 +319,10 @@
+ 		}
+ 		this->mutex->destroy(this->mutex);
+ 		this->keyid->destroy(this->keyid);
++		if (this->keyid_alias)
++		{
++			this->keyid_alias->destroy(this->keyid_alias);
++		}
+ 		this->lib->f->C_CloseSession(this->session);
+ 		free(this);
+ 	}
+@@ -400,6 +417,81 @@
+ }
+ 
+ /**
++ * Find the PKCS#11 lib having an object of the given class, yeah, wild-guess
++ */
++static pkcs11_library_t* find_lib_and_keyid(chunk_t *keyid, int *slot,
++										   CK_OBJECT_CLASS class)
++{
++	pkcs11_manager_t *manager;
++	enumerator_t *enumerator;
++	pkcs11_library_t *p11, *found = NULL;
++	CK_SLOT_ID current;
++	chunk_t keyid_read = chunk_alloc(255);
++	CK_ATTRIBUTE attr[] = {
++		{CKA_ID, keyid_read.ptr, keyid_read.len},
++	};
++	memset(keyid_read.ptr, '\0', keyid_read.len);
++
++	manager = pkcs11_manager_get();
++	if (!manager)
++	{
++		return NULL;
++	}
++	enumerator = manager->create_token_enumerator(manager);
++	while (enumerator->enumerate(enumerator, &p11, &current))
++	{
++		/* look for a pubkey/cert, it is usually readable without login */
++		CK_ATTRIBUTE tmpl[] = {
++			{CKA_CLASS, &class, sizeof(class)},
++		};
++		CK_OBJECT_HANDLE object;
++		CK_SESSION_HANDLE session;
++		CK_RV rv;
++		enumerator_t *keys;
++
++		rv = p11->f->C_OpenSession(current, CKF_SERIAL_SESSION, NULL, NULL,
++								   &session);
++		if (rv != CKR_OK)
++		{
++			DBG1(DBG_CFG, "opening PKCS#11 session failed: %N",
++				 ck_rv_names, rv);
++			continue;
++		}
++		keys = p11->create_object_enumerator(p11, session,
++											 tmpl, countof(tmpl), attr, countof(attr));
++		if (keys->enumerate(keys, &object))
++		{
++			u_char *ptr_to_nul;
++			DBG1(DBG_CFG, "found key on PKCS#11 token '%s':%d",
++				 p11->get_name(p11), current);
++			ptr_to_nul = memchr(keyid_read.ptr, '\0', keyid_read.len);
++			if (!ptr_to_nul)
++			{
++				DBG1(DBG_CFG, "huh? no NUL in '%#B'? ", keyid_read);
++				chunk_free(&keyid_read);
++			}
++			else
++			{
++				keyid_read.len = (ptr_to_nul - keyid_read.ptr);
++				keyid_read.ptr = realloc(keyid_read.ptr, keyid_read.len);
++				DBG1(DBG_CFG, "Hope the correct CKA_ID is '%#B'", &keyid_read);
++				*keyid = keyid_read;
++			}
++			found = p11;
++			*slot = current;
++		}
++		keys->destroy(keys);
++		p11->f->C_CloseSession(session);
++		if (found)
++		{
++			break;
++		}
++	}
++	enumerator->destroy(enumerator);
++	return found;
++}
++
++/**
+  * Find the key on the token
+  */
+ static bool find_key(private_pkcs11_private_key_t *this, chunk_t keyid)
+@@ -464,7 +556,7 @@
+ /**
+  * Find a PIN and try to log in
+  */
+-static bool login(private_pkcs11_private_key_t *this, int slot)
++static bool login(private_pkcs11_private_key_t *this, int slot, identification_t *keyid)
+ {
+ 	CK_RV rv;
+ 	CK_SESSION_INFO info;
+@@ -482,7 +574,7 @@
+ 		return TRUE;
+ 	}
+ 
+-	success = generic_auth(this, CKU_USER, this->keyid);
++	success = generic_auth(this, CKU_USER, keyid);
+ 	if (!success)
+ 	{
+ 		DBG1(DBG_CFG, "login to '%s':%d failed: %N",
+@@ -542,7 +634,7 @@
+ {
+ 	private_pkcs11_private_key_t *this;
+ 	char *module = NULL;
+-	chunk_t keyid = chunk_empty;
++	chunk_t keyid = chunk_empty, keyid_alias = chunk_empty;
+ 	int slot = -1;
+ 	CK_RV rv;
+ 
+@@ -601,6 +693,25 @@
+ 			return NULL;
+ 		}
+ 	}
++	else if (slot == -0x715ED)
++	{
++		keyid_alias = chunk_clone(keyid);
++		this->lib = find_lib_and_keyid(&keyid_alias, &slot, CKO_PUBLIC_KEY);
++		if (!this->lib)
++		{
++			this->lib = find_lib_and_keyid(&keyid_alias, &slot, CKO_CERTIFICATE);
++		}
++		if (!this->lib)
++		{
++			DBG1(DBG_CFG, "no PKCS#11 module found having a keyid %#B", &keyid);
++			free(this);
++			return NULL;
++		}
++		else
++		{
++			DBG1(DBG_CFG, "found a PKCS#11 module in slot %d having a keyid %#B", slot, &keyid_alias);
++		}
++	}
+ 	else
+ 	{
+ 		this->lib = find_lib_by_keyid(keyid, &slot, CKO_PUBLIC_KEY);
+@@ -628,11 +739,19 @@
+ 
+ 	this->mutex = mutex_create(MUTEX_TYPE_DEFAULT);
+ 	this->keyid = identification_create_from_encoding(ID_KEY_ID, keyid);
++	this->keyid_alias = NULL;
++	if (keyid_alias.ptr)
++	{
++		this->keyid_alias = identification_create_from_encoding(ID_KEY_ID, keyid_alias);
++	}
+ 
+-	if (!login(this, slot))
++	if (!login(this, slot, this->keyid))
+ 	{
+-		destroy(this);
+-		return NULL;
++		if (this->keyid_alias && !login(this, slot, this->keyid_alias))
++		{
++			destroy(this);
++			return NULL;
++		}
+ 	}
+ 
+ 	if (!find_key(this, keyid))
+@@ -640,10 +759,22 @@
+ 		this->pubkey = find_pubkey_in_certs(this, keyid);
+ 		if (!this->pubkey)
+ 		{
+-			DBG1(DBG_CFG, "no public key or certificate found for private key "
+-				 "on '%s':%d", module, slot);
+-			destroy(this);
+-			return NULL;
++			DBG1(DBG_CFG, "no public key or certificate found for private key (keyid '%#B') "
++				 "on '%s':%d", &keyid, module, slot);
++			if (!keyid_alias.ptr || !find_key(this, keyid_alias))
++			{
++				if (keyid_alias.ptr)
++				{
++					this->pubkey = find_pubkey_in_certs(this, keyid_alias);
++				}
++				if (!this->pubkey)
++				{
++					DBG1(DBG_CFG, "no public key or certificate found for private key (keyid '%#B') "
++						 "on '%s':%d", &keyid_alias, module, slot);
++					destroy(this);
++					return NULL;
++				}
++			}
+ 		}
+ 	}
+ 
+Index: strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libcharon/plugins/nm/nm_service.c	2013-08-05 15:00:47.898929950 +0200
++++ strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c	2013-08-05 15:27:49.561948320 +0200
+@@ -233,6 +233,16 @@
+ 				priv->creds->set_pin(priv->creds, keyid, pin);
+ 				key = lib->creds->create(lib->creds, CRED_PRIVATE_KEY,
+ 								KEY_ANY, BUILD_PKCS11_KEYID, keyid, BUILD_END);
++				if (!key)
++				{
++					DBG1(DBG_CFG, "Building the private key with keyid %#B failed", &keyid);
++					key = lib->creds->create(lib->creds, CRED_PRIVATE_KEY,
++								KEY_ANY, BUILD_PKCS11_KEYID, keyid, BUILD_PKCS11_SLOT, -0x715ED, BUILD_END);
++					if (!key)
++					{
++						DBG1(DBG_CFG, "building by slot didn't work either");
++					}
++				}
+ 				if (key)
+ 				{
+ 					/* prefer a more convenient subjectAltName */

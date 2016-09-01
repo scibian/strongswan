@@ -1,0 +1,111 @@
+Description: Refactor the authentication code used for login and reauth
+Forwarded: https://wiki.strongswan.org/issues/490
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2013-08-05
+
+Index: strongswan-4.5.2/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c	2013-08-05 15:09:17.507875333 +0200
++++ strongswan-4.5.2/src/libstrongswan/plugins/pkcs11/pkcs11_private_key.c	2013-08-05 15:10:24.199999287 +0200
+@@ -139,9 +139,9 @@
+ }
+ 
+ /**
+- * Reauthenticate to do a signature
++ * Generic login, it takes the CKU
+  */
+-static bool reauth(private_pkcs11_private_key_t *this)
++static bool generic_auth(private_pkcs11_private_key_t *this, unsigned long type, identification_t *keyid)
+ {
+ 	enumerator_t *enumerator;
+ 	shared_key_t *shared;
+@@ -150,30 +150,40 @@
+ 	bool found = FALSE, success = FALSE;
+ 
+ 	enumerator = lib->credmgr->create_shared_enumerator(lib->credmgr,
+-												SHARED_PIN, this->keyid, NULL);
++												SHARED_PIN, keyid, NULL);
+ 	while (enumerator->enumerate(enumerator, &shared, NULL, NULL))
+ 	{
+ 		found = TRUE;
+ 		pin = shared->get_key(shared);
+-		rv = this->lib->f->C_Login(this->session, CKU_CONTEXT_SPECIFIC,
++		rv = this->lib->f->C_Login(this->session, type,
+ 								   pin.ptr, pin.len);
+ 		if (rv == CKR_OK)
+ 		{
+ 			success = TRUE;
+ 			break;
+ 		}
+-		DBG1(DBG_CFG, "reauthentication login failed: %N", ck_rv_names, rv);
++		DBG1(DBG_CFG, "authentication login failed: %N", ck_rv_names, rv);
+ 	}
+ 	enumerator->destroy(enumerator);
+ 
+ 	if (!found)
+ 	{
+-		DBG1(DBG_CFG, "private key requires reauthentication, but no PIN found");
++		DBG1(DBG_CFG, "private key requires authentication, but no PIN found for PKCS#11 key %Y", keyid);
+ 		return FALSE;
+ 	}
+ 	return success;
+ }
+ 
++/**
++ * Reauthenticate to do a signature
++ */
++static bool reauth(private_pkcs11_private_key_t *this)
++{
++	DBG1(DBG_CFG, "reauthentication in progress");
++
++	return generic_auth(this, CKU_CONTEXT_SPECIFIC, this->keyid);
++}
++
+ METHOD(private_key_t, sign, bool,
+ 	private_pkcs11_private_key_t *this, signature_scheme_t scheme,
+ 	chunk_t data, chunk_t *signature)
+@@ -456,12 +466,9 @@
+  */
+ static bool login(private_pkcs11_private_key_t *this, int slot)
+ {
+-	enumerator_t *enumerator;
+-	shared_key_t *shared;
+-	chunk_t pin;
+ 	CK_RV rv;
+ 	CK_SESSION_INFO info;
+-	bool found = FALSE, success = FALSE;
++	bool success;
+ 
+ 	rv = this->lib->f->C_GetSessionInfo(this->session, &info);
+ 	if (rv != CKR_OK)
+@@ -475,28 +482,12 @@
+ 		return TRUE;
+ 	}
+ 
+-	enumerator = lib->credmgr->create_shared_enumerator(lib->credmgr,
+-												SHARED_PIN, this->keyid, NULL);
+-	while (enumerator->enumerate(enumerator, &shared, NULL, NULL))
++	success = generic_auth(this, CKU_USER, this->keyid);
++	if (!success)
+ 	{
+-		found = TRUE;
+-		pin = shared->get_key(shared);
+-		rv = this->lib->f->C_Login(this->session, CKU_USER, pin.ptr, pin.len);
+-		if (rv == CKR_OK)
+-		{
+-			success = TRUE;
+-			break;
+-		}
+ 		DBG1(DBG_CFG, "login to '%s':%d failed: %N",
+ 			 this->lib->get_name(this->lib), slot, ck_rv_names, rv);
+ 	}
+-	enumerator->destroy(enumerator);
+-
+-	if (!found)
+-	{
+-		DBG1(DBG_CFG, "no PIN found for PKCS#11 key %Y", this->keyid);
+-		return FALSE;
+-	}
+ 	return success;
+ }
+ 
