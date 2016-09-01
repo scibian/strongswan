@@ -65,7 +65,9 @@ endif
 build: build-stamp
 build-stamp: 
 	dh_testdir
-	./configure $(CONFIGUREARGS)
+	# Pass CFLAGS to ./configure as the default flags conflict with the ones
+	# used by hardening-wrapper
+	./configure $(CONFIGUREARGS) CFLAGS="$(CFLAGS)"
 	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS)"
 	touch build-stamp
 
