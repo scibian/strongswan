@@ -1,3 +1,27 @@
+strongswan (4.5.2-1.5+deb7u8+scibian1) jessie; urgency=medium
+
+  [ Scibian Packaging Team ]
+  * Add git-buildpackage config
+
+  [ Raphael Geissert ]
+  * Add support support for 'debug' and 'noopt' DEB_BUILD_OPTIONS
+  * Allow the dbg package to be installed without 'strongswan', just the lib
+  * Import upstream patches to support public keys in certificates
+  * Attempt to find the CKA_ID of the private key when the NM plugin fails to
+  * Fix a crash by correctly initialising the NM plugin
+  * Skip the policy constraint as it is overly strict
+  * Add support for config snippets in /etc/strongswan.d/
+  * Add option to NM to forcibly connect to the NAT-T port
+  * Verify the identity the gateway's identity with its cert's subjectAltNames
+  * Use IDENTITY_LOOSE in the NM plugin
+
+  [ Alexis Bezverkhyy ]
+  * Fix a conflict between the default flags and those from hardening-wrapper
+  * Install the systemd unit
+  * Update the includes for the new glib version
+
+ -- Scibian Packaging Team <packaging@scibian.org>  Thu, 01 Sep 2016 12:04:10 +0200
+
 strongswan (4.5.2-1.5+deb7u8) wheezy-security; urgency=medium
 
   * debian/patches:
