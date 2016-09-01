@@ -20,3 +20,4 @@ support_strongswan.d.patch
 charon-nm-natt-support.patch
 identity_loose.patch
 nm-use-identity_loose.patch
+new_glib_include.patch
