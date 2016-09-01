@@ -1,0 +1,35 @@
+Description: Add an option for NM to forcibly connect to the NAT-T port
+Forwarded: https://wiki.strongswan.org/issues/625
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2014-06-24
+
+Index: strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libcharon/plugins/nm/nm_service.c	2014-06-24 10:46:00.716633390 +0200
++++ strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c	2014-06-24 10:50:32.490696993 +0200
+@@ -278,6 +278,7 @@ static gboolean connect_(NMVPNPlugin *pl
+ 	identification_t *user = NULL, *gateway = NULL;
+ 	const char *address, *str;
+ 	bool virtual, encap, ipcomp;
++	u_int16_t ikev2_port;
+ 	ike_cfg_t *ike_cfg;
+ 	peer_cfg_t *peer_cfg;
+ 	child_cfg_t *child_cfg;
+@@ -326,6 +327,8 @@ static gboolean connect_(NMVPNPlugin *pl
+ 	encap = str && streq(str, "yes");
+ 	str = nm_setting_vpn_get_data_item(vpn, "ipcomp");
+ 	ipcomp = str && streq(str, "yes");
++	str = nm_setting_vpn_get_data_item(vpn, "natt");
++	ikev2_port = (str && streq(str, "yes"))? IKEV2_NATT_PORT : IKEV2_UDP_PORT;
+ 	str = nm_setting_vpn_get_data_item(vpn, "method");
+ 	if (str)
+ 	{
+@@ -508,7 +511,7 @@ static gboolean connect_(NMVPNPlugin *pl
+ 	 * Set up configurations
+ 	 */
+ 	ike_cfg = ike_cfg_create(TRUE, encap,
+-					"0.0.0.0", IKEV2_UDP_PORT, (char*)address, IKEV2_UDP_PORT);
++					"0.0.0.0", ikev2_port, (char*)address, ikev2_port);
+ 	ike_cfg->add_proposal(ike_cfg, proposal_create_default(PROTO_IKE));
+ 	peer_cfg = peer_cfg_create(priv->name, 2, ike_cfg,
+ 					CERT_SEND_IF_ASKED, UNIQUE_REPLACE, 1, /* keyingtries */
