@@ -1,0 +1,38 @@
+From e6fcc172f889681ddcefff50a186135b3cfb8b6b Mon Sep 17 00:00:00 2001
+From: Tobias Brunner <tobias@strongswan.org>
+Date: Tue, 18 Sep 2012 14:39:45 +0200
+Subject: [PATCH] Use AUTH_RULE_IDENTITY_LOOSE in NetworkManager backend
+
+---
+ src/libcharon/plugins/nm/nm_service.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+Index: strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libcharon/plugins/nm/nm_service.c	2014-06-26 14:20:04.664397661 +0200
++++ strongswan-4.5.2/src/libcharon/plugins/nm/nm_service.c	2014-06-26 14:21:38.980963675 +0200
+@@ -288,7 +288,7 @@ static gboolean connect_(NMVPNPlugin *pl
+ 	auth_class_t auth_class = AUTH_CLASS_EAP;
+ 	certificate_t *cert = NULL;
+ 	x509_t *x509;
+-	bool agent = FALSE, smartcard = FALSE;
++	bool agent = FALSE, smartcard = FALSE, loose_gateway_id = FALSE;
+ 	lifetime_cfg_t lifetime = {
+ 		.time = {
+ 			.life = 10800 /* 3h */,
+@@ -393,6 +393,7 @@ static gboolean connect_(NMVPNPlugin *pl
+ 		 * included in the gateway certificate. */
+ 		gateway = identification_create_from_string((char*)address);
+ 		DBG1(DBG_CFG, "using CA certificate, gateway identity '%Y'", gateway);
++		loose_gateway_id = TRUE;
+ 	}
+ 
+ 	if (auth_class == AUTH_CLASS_EAP)
+@@ -527,6 +528,7 @@ static gboolean connect_(NMVPNPlugin *pl
+ 	auth = auth_cfg_create();
+ 	auth->add(auth, AUTH_RULE_AUTH_CLASS, AUTH_CLASS_PUBKEY);
+ 	auth->add(auth, AUTH_RULE_IDENTITY, gateway);
++	auth->add(auth, AUTH_RULE_IDENTITY_LOOSE, loose_gateway_id);
+ 	peer_cfg->add_auth_cfg(peer_cfg, auth, FALSE);
+ 
+ 	child_cfg = child_cfg_create(priv->name, &lifetime,

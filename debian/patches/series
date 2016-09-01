@@ -19,3 +19,4 @@ skip_oid_policy_validation.patch
 support_strongswan.d.patch
 charon-nm-natt-support.patch
 identity_loose.patch
+nm-use-identity_loose.patch
