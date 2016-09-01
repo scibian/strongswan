@@ -1,0 +1,19 @@
+Description: disable the policy constraint
+Forwarded: https://wiki.strongswan.org/issues/489
+Author: Raphael Geissert <raphael-externe.geissert@edf.fr>
+Last-Update: 2013-10-11
+
+Index: strongswan-4.5.2/src/libstrongswan/plugins/constraints/constraints_validator.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/plugins/constraints/constraints_validator.c	2011-02-10 15:54:26.000000000 +0100
++++ strongswan-4.5.2/src/libstrongswan/plugins/constraints/constraints_validator.c	2013-10-11 14:20:29.680586492 +0200
+@@ -307,6 +307,9 @@ static bool check_policy(x509_t *subject
+ 	enumerator_t *enumerator;
+ 	char *oid;
+ 
++	/* Policy constraint is too strict */
++	return TRUE;
++
+ 	/* verify if policyMappings in subject are valid */
+ 	enumerator = subject->create_policy_mapping_enumerator(subject);
+ 	while (enumerator->enumerate(enumerator, &mapping))

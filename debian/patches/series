@@ -15,3 +15,4 @@ CVE-2015-8023_eap_mschapv2_state.patch
 login-refactor.patch
 keyid-alias.patch
 nm_plugin_initialization.patch
+skip_oid_policy_validation.patch
