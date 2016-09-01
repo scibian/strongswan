@@ -1,0 +1,144 @@
+From 3a8852c76fd009e11e78ea377796376b1b770da6 Mon Sep 17 00:00:00 2001
+From: Tobias Brunner <tobias@strongswan.org>
+Date: Tue, 18 Sep 2012 11:16:10 +0200
+Subject: [PATCH] Add AUTH_RULE_IDENTITY_LOOSE which allows to use IDr loosely
+ as initiator
+
+If it is set on an auth config IDr will not be sent, and later the configured
+identity will not only be checked against the returned IDr, but also
+against other identities contained in the responder's certificate.
+---
+ src/libcharon/sa/ikev2/tasks/ike_auth.c  |  3 ++-
+ src/libstrongswan/credentials/auth_cfg.c | 23 +++++++++++++++++++++++
+ src/libstrongswan/credentials/auth_cfg.h |  3 +++
+ 3 files changed, 28 insertions(+), 1 deletion(-)
+
+[geissert: backport to 4.5.2]
+
+Index: strongswan-4.5.2/src/libcharon/sa/tasks/ike_auth.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libcharon/sa/tasks/ike_auth.c	2011-02-05 07:40:34.000000000 +0100
++++ strongswan-4.5.2/src/libcharon/sa/tasks/ike_auth.c	2014-06-25 12:23:34.349566101 +0200
+@@ -405,7 +405,8 @@ METHOD(task_t, build_i, status_t,
+ 		if (cfg)
+ 		{
+ 			idr = cfg->get(cfg, AUTH_RULE_IDENTITY);
+-			if (idr && !idr->contains_wildcards(idr))
++			if (!cfg->get(cfg, AUTH_RULE_IDENTITY_LOOSE) && idr &&
++				!idr->contains_wildcards(idr))
+ 			{
+ 				this->ike_sa->set_other_id(this->ike_sa, idr->clone(idr));
+ 				id_payload = id_payload_create_from_identification(
+Index: strongswan-4.5.2/src/libstrongswan/credentials/auth_cfg.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/credentials/auth_cfg.c	2011-02-01 17:57:03.000000000 +0100
++++ strongswan-4.5.2/src/libstrongswan/credentials/auth_cfg.c	2014-06-25 14:24:22.630539041 +0200
+@@ -144,6 +144,7 @@ static void destroy_entry_value(entry_t
+ 			free(entry->value);
+ 			break;
+ 		}
++		case AUTH_RULE_IDENTITY_LOOSE:
+ 		case AUTH_RULE_AUTH_CLASS:
+ 		case AUTH_RULE_EAP_TYPE:
+ 		case AUTH_RULE_EAP_VENDOR:
+@@ -171,6 +172,7 @@ static void replace(auth_cfg_t *this, en
+ 		enumerator->current->type = type;
+ 		switch (type)
+ 		{
++			case AUTH_RULE_IDENTITY_LOOSE:
+ 			case AUTH_RULE_AUTH_CLASS:
+ 			case AUTH_RULE_EAP_TYPE:
+ 			case AUTH_RULE_EAP_VENDOR:
+@@ -251,6 +253,8 @@ static void* get(private_auth_cfg_t *thi
+ 		case AUTH_RULE_CRL_VALIDATION:
+ 		case AUTH_RULE_OCSP_VALIDATION:
+ 			return (void*)VALIDATION_FAILED;
++		case AUTH_RULE_IDENTITY_LOOSE:
++			return (void*)FALSE;
+ 		case AUTH_RULE_IDENTITY:
+ 		case AUTH_RULE_EAP_IDENTITY:
+ 		case AUTH_RULE_AAA_IDENTITY:
+@@ -292,6 +296,7 @@ static void add(private_auth_cfg_t *this
+ 			entry->value = (void*)(uintptr_t)va_arg(args, u_int);
+ 			break;
+ 		case AUTH_RULE_IDENTITY:
++		case AUTH_RULE_IDENTITY_LOOSE:
+ 		case AUTH_RULE_EAP_IDENTITY:
+ 		case AUTH_RULE_AAA_IDENTITY:
+ 		case AUTH_RULE_GROUP:
+@@ -425,6 +430,17 @@ static bool complies(private_auth_cfg_t
+ 				id2 = get(this, t1);
+ 				if (!id2 || !id2->matches(id2, id1))
+ 				{
++					if (t1 == AUTH_RULE_IDENTITY &&
++						constraints->get(constraints, AUTH_RULE_IDENTITY_LOOSE))
++					{	/* also verify identity against subjectAltNames */
++						certificate_t *cert;
++
++						cert = get(this, AUTH_HELPER_SUBJECT_CERT);
++						if (cert && cert->has_subject(cert, id1))
++						{
++							break;
++						}
++					}
+ 					success = FALSE;
+ 					if (log_error)
+ 					{
+@@ -561,6 +577,7 @@ static bool complies(private_auth_cfg_t
+ 				}
+ 				break;
+ 			}
++			case AUTH_RULE_IDENTITY_LOOSE:
+ 			case AUTH_HELPER_IM_CERT:
+ 			case AUTH_HELPER_SUBJECT_CERT:
+ 			case AUTH_HELPER_IM_HASH_URL:
+@@ -619,6 +636,7 @@ static void merge(private_auth_cfg_t *th
+ 					add(this, type, cert->get_ref(cert));
+ 					break;
+ 				}
++				case AUTH_RULE_IDENTITY_LOOSE:
+ 				case AUTH_RULE_CRL_VALIDATION:
+ 				case AUTH_RULE_OCSP_VALIDATION:
+ 				case AUTH_RULE_AUTH_CLASS:
+@@ -723,6 +741,7 @@ static bool equals(private_auth_cfg_t *t
+ 						continue;
+ 					}
+ 					case AUTH_RULE_IDENTITY:
++					case AUTH_RULE_IDENTITY_LOOSE:
+ 					case AUTH_RULE_EAP_IDENTITY:
+ 					case AUTH_RULE_AAA_IDENTITY:
+ 					case AUTH_RULE_GROUP:
+@@ -835,6 +854,7 @@ static auth_cfg_t* clone_(private_auth_c
+ 				clone->add(clone, entry->type, strdup(entry->value));
+ 				break;
+ 			}
++			case AUTH_RULE_IDENTITY_LOOSE:
+ 			case AUTH_RULE_AUTH_CLASS:
+ 			case AUTH_RULE_EAP_TYPE:
+ 			case AUTH_RULE_EAP_VENDOR:
+Index: strongswan-4.5.2/src/libstrongswan/credentials/auth_cfg.h
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/credentials/auth_cfg.h	2011-01-31 13:56:06.000000000 +0100
++++ strongswan-4.5.2/src/libstrongswan/credentials/auth_cfg.h	2014-06-25 12:21:30.332834034 +0200
+@@ -66,6 +66,9 @@ enum auth_rule_t {
+ 
+ 	/** identity to use for IKEv2 authentication exchange, identification_t* */
+ 	AUTH_RULE_IDENTITY,
++	/** if TRUE don't send IDr as initiator, but verify the identity after
++	 * receiving IDr (but also verify it against subjectAltNames), bool */
++	AUTH_RULE_IDENTITY_LOOSE,
+ 	/** authentication class, auth_class_t */
+ 	AUTH_RULE_AUTH_CLASS,
+ 	/** AAA-backend identity for EAP methods supporting it, identification_t* */
+Index: strongswan-4.5.2/src/libstrongswan/eap/eap.c
+===================================================================
+--- strongswan-4.5.2.orig/src/libstrongswan/eap/eap.c	2011-04-08 07:50:20.000000000 +0200
++++ strongswan-4.5.2/src/libstrongswan/eap/eap.c	2014-06-25 14:09:54.621370472 +0200
+@@ -89,6 +89,7 @@ ENUM_END(eap_type_short_names, EAP_EXPER
+ 
+ ENUM(auth_rule_names, AUTH_RULE_IDENTITY, AUTH_HELPER_SUBJECT_HASH_URL,
+ 	"RULE_IDENTITY",
++	"RULE_IDENTITY_LOOSE",
+ 	"RULE_AUTH_CLASS",
+ 	"RULE_EAP_IDENTITY",
+ 	"RULE_EAP_TYPE",
